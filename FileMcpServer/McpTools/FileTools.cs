@@ -29,7 +29,7 @@ namespace FileMcpServer.McpTools
             if (!string.IsNullOrEmpty(filter))
                 files = files.Where(file => file.FileName.Contains(filter, StringComparison.OrdinalIgnoreCase));
 
-            return files.Select(file => file.FilePath);
+            return files.Select(file => file.FullPath);
         }
 
         [McpServerTool(Title = "Read entire text file and return is as Markdown.", ReadOnly = true)]
@@ -46,12 +46,13 @@ namespace FileMcpServer.McpTools
             }
 
             var files = ExpandFolderFiles(context.AvailableFiles);
-            FileContext? file = files.SingleOrDefault(file => String.Equals(filePath, file.FilePath, StringComparison.OrdinalIgnoreCase));
+            FileContext? file = files.SingleOrDefault(file => String.Equals(filePath, file.FullPath, StringComparison.OrdinalIgnoreCase));
 
             if (file == null)
                 throw new FileNotFoundException($"File '{filePath}' not found on the server.");
 
-            return await File.ReadAllTextAsync(file.FilePath, Encoding.UTF8, token);
+            string content = await File.ReadAllTextAsync(file.FullPath, Encoding.UTF8, token);
+            return await ConvertDocumentToMarkdownAsync(content, file.FileType);
         }
 
         [McpServerTool(Title = "Read entire text file and return is as Markdown.", ReadOnly = false)]
@@ -66,11 +67,12 @@ namespace FileMcpServer.McpTools
                 throw new InvalidOperationException("ServerContext is not initialized.");
             }
 
-            FileContext? file = context.AvailableFiles.SingleOrDefault(file => String.Equals(filePath, file.FilePath, StringComparison.OrdinalIgnoreCase));
+            FileContext? file = context.AvailableFiles.SingleOrDefault(file => String.Equals(filePath, file.FullPath, StringComparison.OrdinalIgnoreCase));
             if (file == null)
                 throw new FileNotFoundException($"File '{filePath}' not found on the server.");
 
-            await File.WriteAllTextAsync(file.FilePath, content, Encoding.UTF8, token);
+            content = await ConvertMarkdownToDocumentAsync(content, file.FileType);
+            await File.WriteAllTextAsync(file.FullPath, content, Encoding.UTF8, token);
         }
 
         #region Helper methods
@@ -79,19 +81,33 @@ namespace FileMcpServer.McpTools
         {
             var filesInFolders = availableFiles
                 .Where(file => file.IsFolder)
-                .SelectMany(folder => Directory.GetFiles(folder.FilePath))
+                .SelectMany(folder => Directory.GetFiles(folder.FullPath))
                 .Select(filePath => new FileContext(filePath));
             return availableFiles.Union(filesInFolders);
         }
 
-        private static Task<string> ConvertDocumentToMarkdownAsync(string contents)
+        /// <summary>
+        /// Converts non-text files to Markdown format, for example DOCX, ODT or PDF files.
+        /// </summary>
+        private static async Task<string> ConvertDocumentToMarkdownAsync(string contents, FileFormat format)
         {
-            throw new NotImplementedException();
+            //TODO: Check if the file is already in Markdown format.
+            //TODO: Implement conversion from document to Markdown.
+            await Task.CompletedTask;
+
+            return contents;
         }
 
-        private static Task<string> ConvertMarkdownToDocumentAsync(string contents)
+        /// <summary>
+        /// Converts the provided Markdown content into a document formatted according to the specified file format.
+        /// </summary>
+        private static async Task<string> ConvertMarkdownToDocumentAsync(string contents, FileFormat format)
         {
-            throw new NotImplementedException();
+            //TODO: Check if conversion is necessary.
+            //TODO: Implement conversion from Markdown to document.
+            await Task.CompletedTask;
+
+            return contents;
         }
 
         #endregion
