@@ -1,3 +1,5 @@
+// Ignore Spelling: env
+
 using FileMcpServer.DataTransfer;
 
 namespace FileMcpServer
