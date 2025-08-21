@@ -1,6 +1,6 @@
-// Ignore Spelling: env
-
 using FileMcpServer.DataTransfer;
+
+#pragma warning disable IDE0051  // Private member is unused.
 
 namespace FileMcpServer
 {
@@ -8,12 +8,12 @@ namespace FileMcpServer
     {
         public static readonly ServerContext ServerContext = new ServerContext();
 
-        async static void StartWebServer()
+        async static void StartWebServerV1()
         {
-            IHost Host = Microsoft.Extensions.Hosting.Host
-                .CreateDefaultBuilder()
+            var app = Host.CreateDefaultBuilder()
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
+                    // Configure Kestrel server options
                     webBuilder.UseKestrel()
                         .UseUrls("http://localhost:5000") // Set the URL for the web server
                         .UseStartup<KestrelStartup>(); // Specify the Startup class for configuration
@@ -21,7 +21,8 @@ namespace FileMcpServer
                     webBuilder.ConfigureServices(services =>
                     {
                         services.AddMcpServer()
-                           .WithStdioServerTransport()  // easiest desktop transport
+                           //.WithStdioServerTransport()  // best for local MCP host
+                           .WithHttpTransport() // best for remote MCP host
                            .WithToolsFromAssembly();    // will auto-discover our tools
 
                         // Register any additional services here
@@ -32,16 +33,48 @@ namespace FileMcpServer
 
             //INFO: Assigning Host.Services here does not work as application is not yet started.
 
-            await Host.RunAsync(); // fire-and-forget
+            await app.RunAsync(); // fire-and-forget
+        }
+
+        async static void StartWebServerV2()
+        {
+            var builder = WebApplication.CreateBuilder();
+
+            builder.WebHost.UseKestrel()
+                .UseUrls("http://localhost:5000"); // Set the URL for the web server
+
+            IServiceCollection services = builder.Services;
+
+            builder.Services.AddMcpServer()
+                //.WithStdioServerTransport()  // best for local MCP host
+                .WithHttpTransport() // best for remote MCP host
+                .WithToolsFromAssembly();    // will auto-discover our tools
+
+            // Register any additional services here
+            builder.Services.AddSingleton<ServerContext>();
+
+            WebApplication app = builder.Build();
+
+            app.MapGet("/", async context =>
+            {
+                await context.Response.WriteAsync("Welcome to the File MCP Server!");
+            });
+
+            app.MapMcp("/mcp"); // This maps the MCP server endpoints
+
+            //INFO: Assigning Host.Services here does not work as application is not yet started.
+
+            await app.RunAsync(); // fire-and-forget
         }
 
         /// <summary>
         ///  The main entry point for the application.
         /// </summary>
         [STAThread]
-        static void Main()
+        static void Main(string[] args)
         {
-            StartWebServer();
+            //StartWebServerV1();
+            StartWebServerV2();
 
             // To customize application configuration such as set high DPI settings or default font,
             // see https://aka.ms/applicationconfiguration.
@@ -78,6 +111,8 @@ namespace FileMcpServer
                 {
                     await context.Response.WriteAsync("Welcome to the File MCP Server!");
                 });
+
+                endpoints.MapMcp("/mcp"); // This maps the MCP server endpoints
             });
         }
     }
