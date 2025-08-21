@@ -18,14 +18,10 @@ namespace FileMcpServer.McpTools
             [Description("Optional filter to apply to the file list.")] string? filter = null,
             CancellationToken token = default)
         {
-            ServerContext context = Program.Services.GetRequiredService<ServerContext>();
-            if (context.AvailableFiles == null)
-            {
-                throw new InvalidOperationException("ServerContext is not initialized.");
-            }
+            CheckInitializationReady();
 
             // Apply filter if provided
-            var files = ExpandFolderFiles(context.AvailableFiles);
+            var files = ExpandFolderFiles(Program.ServerContext.AvailableFiles!);
             if (!string.IsNullOrEmpty(filter))
                 files = files.Where(file => file.FileName.Contains(filter, StringComparison.OrdinalIgnoreCase));
 
@@ -39,13 +35,9 @@ namespace FileMcpServer.McpTools
         {
             //TODO: Convert non txt or Markdown files to Markdown.
 
-            ServerContext context = Program.Services.GetRequiredService<ServerContext>();
-            if (context.AvailableFiles == null)
-            {
-                throw new InvalidOperationException("ServerContext is not initialized.");
-            }
+            CheckInitializationReady();
 
-            var files = ExpandFolderFiles(context.AvailableFiles);
+            var files = ExpandFolderFiles(Program.ServerContext.AvailableFiles!);
             FileContext? file = files.SingleOrDefault(file => String.Equals(filePath, file.FullPath, StringComparison.OrdinalIgnoreCase));
 
             if (file == null)
@@ -61,13 +53,10 @@ namespace FileMcpServer.McpTools
             [Description("Plain text or Markdown to overwrite the file.")] string content,
             CancellationToken token)
         {
-            ServerContext context = Program.Services.GetRequiredService<ServerContext>();
-            if (context.AvailableFiles == null)
-            {
-                throw new InvalidOperationException("ServerContext is not initialized.");
-            }
+            CheckInitializationReady();
 
-            FileContext? file = context.AvailableFiles.SingleOrDefault(file => String.Equals(filePath, file.FullPath, StringComparison.OrdinalIgnoreCase));
+            FileContext? file = Program.ServerContext.AvailableFiles!
+                .SingleOrDefault(file => String.Equals(filePath, file.FullPath, StringComparison.OrdinalIgnoreCase));
             if (file == null)
                 throw new FileNotFoundException($"File '{filePath}' not found on the server.");
 
@@ -77,6 +66,13 @@ namespace FileMcpServer.McpTools
 
         #region Helper methods
 
+        private static void CheckInitializationReady()
+        {
+            if (Program.ServerContext.AvailableFiles == null)
+            {
+                throw new InvalidOperationException("ServerContext is not initialized.");
+            }
+        }
         private static IEnumerable<FileContext> ExpandFolderFiles(IQueryable<FileContext> availableFiles)
         {
             var filesInFolders = availableFiles

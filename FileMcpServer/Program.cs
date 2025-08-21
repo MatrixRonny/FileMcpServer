@@ -1,30 +1,36 @@
 using FileMcpServer.DataTransfer;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 
 namespace FileMcpServer
 {
     internal static class Program
     {
-        public static IHost Host { get; }
-        public static IServiceProvider Services { get; }
+        public static readonly ServerContext ServerContext = new ServerContext();
 
-        static Program()
+        async static void StartWebServer()
         {
-            Host = Microsoft.Extensions.Hosting.Host
+            IHost Host = Microsoft.Extensions.Hosting.Host
                 .CreateDefaultBuilder()
-                .ConfigureServices((ctx, svc) =>
+                .ConfigureWebHostDefaults(webBuilder =>
                 {
-                    svc.AddMcpServer()
-                       .WithStdioServerTransport()  // easiest desktop transport
-                       .WithToolsFromAssembly();    // will auto-discover our tools
+                    webBuilder.UseKestrel()
+                        .UseUrls("http://localhost:5000") // Set the URL for the web server
+                        .UseStartup<KestrelStartup>(); // Specify the Startup class for configuration
 
-                    // Register any additional services here
-                    svc.AddSingleton<ServerContext>();
+                    webBuilder.ConfigureServices(services =>
+                    {
+                        services.AddMcpServer()
+                           .WithStdioServerTransport()  // easiest desktop transport
+                           .WithToolsFromAssembly();    // will auto-discover our tools
+
+                        // Register any additional services here
+                        services.AddSingleton<ServerContext>();
+                    });
                 })
                 .Build();
 
-            Services = Host.Services; // make the service provider available to the rest of the app
+            //INFO: Assigning Host.Services here does not work as application is not yet started.
+
+            await Host.RunAsync(); // fire-and-forget
         }
 
         /// <summary>
@@ -33,14 +39,44 @@ namespace FileMcpServer
         [STAThread]
         static void Main()
         {
-            _ = Host.RunAsync(); // fire-and-forget
+            StartWebServer();
 
             // To customize application configuration such as set high DPI settings or default font,
             // see https://aka.ms/applicationconfiguration.
             ApplicationConfiguration.Initialize();
 
-            ServerContext context = Services.GetRequiredService<ServerContext>();
-            Application.Run(new DragDropFileList(context));
+            Application.Run(new DragDropFileList());
+        }
+    }
+
+    internal class KestrelStartup
+    {
+        public void ConfigureServices(IServiceCollection services)
+        {
+            // Use this method to add services to the container.
+
+            //services.AddControllers(); // Also uncomment MapControllers in Configure method.
+            services.AddSingleton(Program.ServerContext);
+        }
+        public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
+        {
+            // Use this method to configure the HTTP request pipeline.
+
+            if (env.IsDevelopment())
+            {
+                app.UseDeveloperExceptionPage();
+            }
+
+            app.UseRouting();
+            app.UseEndpoints(endpoints =>
+            {
+                //endpoints.MapControllers();
+
+                endpoints.MapGet("/", async context =>
+                {
+                    await context.Response.WriteAsync("Welcome to the File MCP Server!");
+                });
+            });
         }
     }
 }

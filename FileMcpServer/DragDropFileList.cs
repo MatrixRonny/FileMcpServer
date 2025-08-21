@@ -1,4 +1,5 @@
 using FileMcpServer.DataTransfer;
+using FileMcpServer.Utility;
 using System.Linq;
 
 namespace FileMcpServer
@@ -7,12 +8,12 @@ namespace FileMcpServer
     {
         internal ServerContext ServerContext { get; }
 
-        internal DragDropFileList(ServerContext context)
+        internal DragDropFileList()
         {
             InitializeComponent();
 
-            ServerContext = context;
-            ServerContext.AvailableFiles = listBoxPaths.Items.AsQueryable().Cast<string>().Select(it => new FileContext(it));
+            Program.ServerContext.AvailableFiles = new ListBoxItemsEnumerable<string>(listBoxPaths.Items)
+                .AsQueryable().Cast<string>().Select(it => new FileContext(it));
         }
     }
 }

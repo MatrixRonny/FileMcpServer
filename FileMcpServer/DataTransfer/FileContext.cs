@@ -4,10 +4,11 @@ namespace FileMcpServer.DataTransfer
     internal class FileContext
     {
         public string FullPath { get; init; }
-        public string? FileName => Path.GetFileName(FullPath);
+        public string FileName => Path.GetFileName(FullPath);
         public bool IsFolder => Directory.Exists(FullPath);
 
         public string? FileExtension => Path.GetExtension(FileName);
+
         public FileFormat FileType
         {
             get
