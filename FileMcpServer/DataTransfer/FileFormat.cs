@@ -9,6 +9,7 @@
         HTML,
         DOCX,
         ODT,
-        PDF
+        PDF,
+        RichText
     }
 }

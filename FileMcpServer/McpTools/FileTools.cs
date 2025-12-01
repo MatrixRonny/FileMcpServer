@@ -1,4 +1,5 @@
 ﻿using FileMcpServer.DataTransfer;
+using FileMcpServer.Utility;
 using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.Server;
 using System;
@@ -29,7 +30,8 @@ namespace FileMcpServer.McpTools
             if (!string.IsNullOrEmpty(filter))
                 files = files.Where(file => file.FileName.Contains(filter, StringComparison.OrdinalIgnoreCase));
 
-            return files.Select(file => file.FullPath);
+            // Convert paths to use forward slashes and remove colons from drive letters.
+            return files.Select(file => file.FullPath).Select(WindowsToUnixPath);
         }
 
         [McpServerTool(Title = "Read entire text file and return is as Markdown.", ReadOnly = true)]
@@ -37,53 +39,101 @@ namespace FileMcpServer.McpTools
             [Description("Absolute path under one of the allowed roots")] string filePath,
             CancellationToken token)
         {
-            //TODO: Convert non txt or Markdown files to Markdown.
-
-            ServerContext context = Program.Services.GetRequiredService<ServerContext>();
-            if (context.AvailableFiles == null)
+            try
             {
-                throw new InvalidOperationException("ServerContext is not initialized.");
+                //TODO: Convert non txt or Markdown files to Markdown.
+
+                ServerContext context = Program.Services.GetRequiredService<ServerContext>();
+                if (context.AvailableFiles == null)
+                {
+                    throw new InvalidOperationException("ServerContext is not initialized.");
+                }
+
+                filePath = UnixToWindowsPath(filePath);
+
+                var files = ExpandFolderFiles(context.AvailableFiles);
+                FileContext? file = files.SingleOrDefault(file => String.Equals(filePath, file.FullPath, StringComparison.OrdinalIgnoreCase));
+
+                if (file == null)
+                    throw new FileNotFoundException($"File '{WindowsToUnixPath(filePath)}' not found on the server.");
+
+                string content = await File.ReadAllTextAsync(file.FullPath, Encoding.UTF8, token);
+                return await ConvertDocumentToMarkdownAsync(content, file.FileType);
             }
-
-            var files = ExpandFolderFiles(context.AvailableFiles);
-            FileContext? file = files.SingleOrDefault(file => String.Equals(filePath, file.FullPath, StringComparison.OrdinalIgnoreCase));
-
-            if (file == null)
-                throw new FileNotFoundException($"File '{filePath}' not found on the server.");
-
-            string content = await File.ReadAllTextAsync(file.FullPath, Encoding.UTF8, token);
-            return await ConvertDocumentToMarkdownAsync(content, file.FileType);
+            catch (Exception ex)
+            {
+                return $"Error reading file: {ex.Message}";
+            }
         }
 
         [McpServerTool(Title = "Read entire text file and return is as Markdown.", ReadOnly = false)]
-        public static async Task WriteFileAsync(
+        public static async Task<string> WriteFileAsync(
             [Description("Absolute path for file exposed by server.")] string filePath,
             [Description("Plain text or Markdown to overwrite the file.")] string content,
             CancellationToken token)
         {
-            ServerContext context = Program.Services.GetRequiredService<ServerContext>();
-            if (context.AvailableFiles == null)
+            try
             {
-                throw new InvalidOperationException("ServerContext is not initialized.");
+                ServerContext context = Program.Services.GetRequiredService<ServerContext>();
+                if (context.AvailableFiles == null)
+                {
+                    throw new InvalidOperationException("ServerContext is not initialized.");
+                }
+
+                filePath = UnixToWindowsPath(filePath);
+
+                FileContext? file = context.AvailableFiles.SingleOrDefault(file => String.Equals(filePath, file.FullPath, StringComparison.OrdinalIgnoreCase));
+                if (file == null)
+                    throw new FileNotFoundException($"File '{WindowsToUnixPath(filePath)}' not found on the server.");
+
+                content = await ConvertMarkdownToDocumentAsync(content, file.FileType);
+                await File.WriteAllTextAsync(file.FullPath, content, Encoding.UTF8, token);
+
+                return "File written successfully.";
             }
-
-            FileContext? file = context.AvailableFiles.SingleOrDefault(file => String.Equals(filePath, file.FullPath, StringComparison.OrdinalIgnoreCase));
-            if (file == null)
-                throw new FileNotFoundException($"File '{filePath}' not found on the server.");
-
-            content = await ConvertMarkdownToDocumentAsync(content, file.FileType);
-            await File.WriteAllTextAsync(file.FullPath, content, Encoding.UTF8, token);
+            catch (Exception ex)
+            {
+                return $"Error writing file: {ex.Message}";
+            }
         }
 
         #region Helper methods
 
         private static IEnumerable<FileContext> ExpandFolderFiles(IQueryable<FileContext> availableFiles)
         {
-            var filesInFolders = availableFiles
-                .Where(file => file.IsFolder)
-                .SelectMany(folder => Directory.GetFiles(folder.FullPath))
-                .Select(filePath => new FileContext(filePath));
-            return availableFiles.Union(filesInFolders);
+            FileContext? fileOrFolder = availableFiles.FirstOrDefault();
+            if (fileOrFolder == null)
+                return Enumerable.Empty<FileContext>();
+
+            Func<int> PrintLengthObserver = fileOrFolder.PrintLengthObserver;
+
+            List<FileContext> allFiles = availableFiles.Where(f => !f.IsFolder).ToList();
+            Queue<FileContext> foldersOnly = new(availableFiles.Where(f => f.IsFolder));
+
+            while (foldersOnly.Any())
+            {
+                var folder = foldersOnly.Dequeue();
+
+                var folderFiles = Directory.GetFiles(folder.FullPath).Select(filePath => new FileContext
+                {
+                    FullPath = filePath,
+                    PrintLengthObserver = PrintLengthObserver
+                });
+                var foldersInFolder = Directory.GetDirectories(folder.FullPath).Select(dirPath => new FileContext
+                {
+                    FullPath = dirPath,
+                    PrintLengthObserver = PrintLengthObserver
+                });
+
+                foreach (var innerFolder in foldersInFolder)
+                {
+                    foldersOnly.Enqueue(innerFolder);
+                }
+
+                allFiles.AddRange(folderFiles);
+            }
+
+            return allFiles;
         }
 
         /// <summary>
@@ -91,11 +141,14 @@ namespace FileMcpServer.McpTools
         /// </summary>
         private static async Task<string> ConvertDocumentToMarkdownAsync(string contents, FileFormat format)
         {
-            //TODO: Check if the file is already in Markdown format.
-            //TODO: Implement conversion from document to Markdown.
-            await Task.CompletedTask;
-
-            return contents;
+            try
+            {
+                return await FileConverter.ConvertToTextAsync(contents, format);
+            }
+            catch (Exception ex)
+            {
+                return $"Error converting \"{format}\" format to text: {ex.Message}";
+            }
         }
 
         /// <summary>
@@ -108,6 +161,20 @@ namespace FileMcpServer.McpTools
             await Task.CompletedTask;
 
             return contents;
+        }
+
+        private static string WindowsToUnixPath(string filePath)
+        {
+            return filePath[0] + filePath.Substring(2).Replace('\\', '/');
+            //return filePath.Replace('\\', '/');
+        }
+
+        private static string UnixToWindowsPath(string filePath)
+        {
+            bool hasColon = filePath[1] == ':';
+
+            return filePath[0] + ":" + filePath.Substring(hasColon ? 2 : 1).Replace('/', '\\');
+            //return filePath.Replace('/', '\\');
         }
 
         #endregion

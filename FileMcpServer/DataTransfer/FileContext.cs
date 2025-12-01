@@ -1,10 +1,12 @@
 ﻿
+using System.Diagnostics.CodeAnalysis;
+
 namespace FileMcpServer.DataTransfer
 {
     internal class FileContext
     {
-        public string FullPath { get; init; }
-        public string? FileName => Path.GetFileName(FullPath);
+        public required string FullPath { get; init; }
+        public string FileName => Path.GetFileName(FullPath);
         public bool IsFolder => Directory.Exists(FullPath);
 
         public string? FileExtension => Path.GetExtension(FileName);
@@ -16,6 +18,7 @@ namespace FileMcpServer.DataTransfer
                 {
                     ".txt" => FileFormat.PlainText,
                     ".md" => FileFormat.Markdown,
+                    ".rtf" => FileFormat.RichText,
                     ".docx" => FileFormat.DOCX,
                     ".odt" => FileFormat.ODT,
                     ".pdf" => FileFormat.PDF,
@@ -25,9 +28,25 @@ namespace FileMcpServer.DataTransfer
             }
         }
 
-        public FileContext(string filePath)
+        public int PrintLength => PrintLengthObserver();
+        public required Func<int> PrintLengthObserver { get; init; }
+
+        public FileContext() { }
+
+        [SetsRequiredMembers]
+        public FileContext(string filePath, Func<int> printLengthObserver)
         {
             FullPath = filePath ?? throw new ArgumentNullException(nameof(filePath));
+            PrintLengthObserver = printLengthObserver ?? throw new ArgumentNullException(nameof(printLengthObserver));
+        }
+
+        public override string ToString()
+        {
+            // Displays first 10 characters from the beginning, then ... and last printLength - 13 characters.
+            if (FullPath.Length <= PrintLength)
+                return FullPath;
+            else
+                return FullPath.Substring(0, 10) + "..." + FullPath.Substring(FullPath.Length - (PrintLength - 13));
         }
     }
 }
