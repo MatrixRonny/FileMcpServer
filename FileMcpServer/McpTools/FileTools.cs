@@ -31,7 +31,7 @@ namespace FileMcpServer.McpTools
                 files = files.Where(file => file.FileName.Contains(filter, StringComparison.OrdinalIgnoreCase));
 
             // Convert paths to use forward slashes and remove colons from drive letters.
-            return files.Select(file => file.FullPath).Select(WindowsToUnixPath);
+            return files.Select(file => file.FullPath).Select(WindowsToUnixPath).Distinct();
         }
 
         [McpServerTool(Title = "Read entire text file and return is as Markdown.", ReadOnly = true)]

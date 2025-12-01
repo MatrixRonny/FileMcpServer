@@ -42,11 +42,14 @@ namespace FileMcpServer.DataTransfer
 
         public override string ToString()
         {
-            // Displays first 10 characters from the beginning, then ... and last printLength - 13 characters.
-            if (FullPath.Length <= PrintLength)
-                return FullPath;
+            // Combine whether file or folder and then the full path.
+            string fileDetails = (IsFolder ? "[Folder] " : "[File] ") + FullPath;
+
+            // Displays first 20 characters from the beginning, then ... and last printLength - 23 characters.
+            if (fileDetails.Length <= PrintLength)
+                return fileDetails;
             else
-                return FullPath.Substring(0, 10) + "..." + FullPath.Substring(FullPath.Length - (PrintLength - 13));
+                return fileDetails.Substring(0, 20) + "..." + fileDetails.Substring(fileDetails.Length - (PrintLength - 23));
         }
     }
 }

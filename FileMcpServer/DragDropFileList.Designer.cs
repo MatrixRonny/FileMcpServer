@@ -45,6 +45,7 @@
             ListBoxPaths.Size = new Size(560, 334);
             ListBoxPaths.TabIndex = 0;
             ListBoxPaths.SelectedIndexChanged += ListBoxPaths_SelectedIndexChanged;
+            ListBoxPaths.Resize += ListBoxPaths_Resize;
             // 
             // RemoveButton
             // 
